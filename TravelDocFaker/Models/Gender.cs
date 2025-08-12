@@ -1,4 +1,18 @@
 ﻿namespace TravelDocFaker.Models
 {
-    public enum Gender { Male, Female }
+    /// <summary>
+    /// Represents the gender of a person.
+    /// </summary>
+    public enum Gender
+    {
+        /// <summary>
+        /// Male gender.
+        /// </summary>
+        Male,
+
+        /// <summary>
+        /// Female gender.
+        /// </summary>
+        Female
+    }
 }
