@@ -6,7 +6,7 @@ param(
 )
 
 # -------------------------
-# Tipos de commit permitidos
+# Allowed commit types
 # -------------------------
 $types = @(
     "feat",
@@ -23,7 +23,7 @@ $types = @(
 )
 
 # -------------------------
-# Entrada interativa (se faltar algo)
+# Interactive input if missing
 # -------------------------
 if (-not $Type) {
     Write-Host "Select commit type:"
@@ -56,32 +56,32 @@ if (-not $LongDesc) {
 }
 
 # -------------------------
-# Calcular incremento da versão
+# Determine version increment
 # -------------------------
 $increment = switch ($Type) {
     "feat"     { "minor" }
     "breaking" { "major" }
-    default    { "fix"; break } # "fix" e todos os outros caem em patch
+    default    { "fix"; break }
 }
 if ($increment -eq "fix") { $increment = "patch" }
 
 # -------------------------
-# Localizar e ler o .csproj
+# Locate and read .csproj
 # -------------------------
 $csprojPath = Join-Path $PSScriptRoot 'TravelDocFaker\TravelDocFaker.csproj'
 if (-not (Test-Path -LiteralPath $csprojPath)) {
-    Write-Error "Nenhum .csproj encontrado em $csprojPath"
+    Write-Error "No .csproj found at $csprojPath"
     exit 1
 }
 
 [xml]$xml = Get-Content -LiteralPath $csprojPath
 
-# Encontrar (ou criar) o nó <Version>
+# Find or create <Version> node
 $versionNode = $xml.SelectSingleNode('//Project/PropertyGroup/Version')
 if (-not $versionNode) {
     $pg = $xml.SelectSingleNode('//Project/PropertyGroup')
     if (-not $pg) {
-        Write-Error "Não foi encontrado <PropertyGroup> no .csproj."
+        Write-Error "No <PropertyGroup> found in the .csproj."
         exit 1
     }
     $versionNode = $xml.CreateElement('Version')
@@ -92,12 +92,12 @@ if (-not $versionNode) {
 $oldVersion = ($versionNode.InnerText).Trim()
 
 if ($oldVersion -notmatch '^\d+\.\d+\.\d+$') {
-    Write-Error "Valor de <Version> inválido: '$oldVersion' (esperado: MAJOR.MINOR.PATCH)"
+    Write-Error "Invalid <Version> value: '$oldVersion' (expected: MAJOR.MINOR.PATCH)"
     exit 1
 }
 
 # -------------------------
-# Incrementar versão
+# Increment version
 # -------------------------
 $parts = $oldVersion.Split('.')
 [int]$major = $parts[0]
@@ -113,13 +113,13 @@ switch ($increment) {
 $newVersion = "$major.$minor.$patch"
 $versionNode.InnerText = $newVersion
 
-# Gravar de volta
+# Save updated .csproj
 $xml.Save($csprojPath)
 
 Write-Host "Version updated: $oldVersion → $newVersion"
 
 # -------------------------
-# Mensagem de commit
+# Commit message
 # -------------------------
 $scopeFormatted = if ($Scope -and $Scope.Trim() -ne "") { "($Scope)" } else { "" }
 
@@ -130,19 +130,20 @@ $commitPreview = if ($LongDesc -and $LongDesc.Trim() -ne "") {
     $commitHeader
 }
 
-Write-Host "`nCommit gerado:"
+Write-Host "`nGenerated commit message:"
 Write-Host "------------------------------------"
 Write-Host $commitPreview
 Write-Host "------------------------------------"
 
 # -------------------------
-# Confirmar e executar git
+# Confirm and execute git
 # -------------------------
-$confirm = Read-Host "Confirm commit and tag version $newVersion? (s/n)"
-if ($confirm.ToLower() -eq "s") {
-    git add .
+$confirm = Read-Host "Confirm commit and tag version $newVersion? (y/n)"
+if ($confirm.ToLower() -eq "y") {
+    # Add all changes (new, modified, deleted)
+    git add -A
 
-    # Passar mensagens como array de argumentos evita problemas de quoting
+    # Pass messages as array to avoid quoting issues
     $gitArgs = @('-m', $commitHeader)
     if ($LongDesc -and $LongDesc.Trim() -ne "") {
         $gitArgs += @('-m', $LongDesc)
@@ -150,30 +151,29 @@ if ($confirm.ToLower() -eq "s") {
 
     git commit @gitArgs
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Falha no git commit."
+        Write-Error "Git commit failed."
         exit 1
     }
 
-    # Atualiza o branch e a tag
     git push
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Falha no git push."
+        Write-Error "Git push failed."
         exit 1
     }
 
     git tag "v$newVersion"
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Falha ao criar a tag."
+        Write-Error "Failed to create tag."
         exit 1
     }
 
     git push origin "v$newVersion"
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Falha ao enviar a tag."
+        Write-Error "Failed to push tag."
         exit 1
     }
 
-    Write-Host "✅ Commit e tag 'v$newVersion' enviados!"
+    Write-Host "Commit and tag 'v$newVersion' pushed successfully."
 } else {
-    Write-Host "❌ Commit cancelado."
+    Write-Host "Commit canceled."
 }
