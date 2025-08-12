@@ -5,6 +5,10 @@ on:
     workflows: ["CI Linux", "CI Windows"]
     types: [completed]
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   publish:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -17,8 +21,22 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
+      - name: Ensure this commit is tagged v*
+        id: tagcheck
+        run: |
+          set -e
+          git fetch --tags --force
+          TAG=$(git describe --exact-match --tags ${{ github.event.workflow_run.head_sha }} 2>/dev/null || true)
+          if [ -n "$TAG" ] && echo "$TAG" | grep -Eq '^v'; then
+            echo "ok_tag=true" >> $GITHUB_OUTPUT
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+          else
+            echo "ok_tag=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Verify both CI workflows succeeded for this commit
         id: verify
+        if: steps.tagcheck.outputs.ok_tag == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
@@ -34,7 +52,6 @@ jobs:
 
           check_success() {
             local wid="$1"
-            # Fetch the latest run for this workflow and head_sha
             gh api -X GET \
               "repos/$OWNER/$REPO/actions/workflows/$wid/runs?head_sha=$HEAD_SHA&per_page=1" \
               --jq '.workflow_runs[0].conclusion // "none"'
@@ -44,7 +61,8 @@ jobs:
           WWIN=$(get_workflow_id "CI Windows")
 
           if [ -z "$WLINUX" ] || [ -z "$WWIN" ]; then
-            echo "Missing workflow ids for CI Linux/CI Windows"; exit 1
+            echo "ok=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           CLINUX=$(check_success "$WLINUX")
@@ -59,28 +77,32 @@ jobs:
             echo "ok=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Stop if not a v* tag
+        if: steps.tagcheck.outputs.ok_tag != 'true'
+        run: echo "No v* tag for this commit. Skipping publish."
+
       - name: Stop if both CIs not green
-        if: steps.verify.outputs.ok != 'true'
+        if: steps.tagcheck.outputs.ok_tag == 'true' && steps.verify.outputs.ok != 'true'
         run: echo "Both CI Linux and CI Windows must succeed. Skipping publish."
 
       - name: Setup .NET
-        if: steps.verify.outputs.ok == 'true'
+        if: steps.tagcheck.outputs.ok_tag == 'true' && steps.verify.outputs.ok == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        if: steps.verify.outputs.ok == 'true'
+        if: steps.tagcheck.outputs.ok_tag == 'true' && steps.verify.outputs.ok == 'true'
         run: dotnet restore ./TravelDocFaker/TravelDocFaker.csproj
 
       - name: Build
-        if: steps.verify.outputs.ok == 'true'
+        if: steps.tagcheck.outputs.ok_tag == 'true' && steps.verify.outputs.ok == 'true'
         run: dotnet build ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-restore
 
       - name: Pack
-        if: steps.verify.outputs.ok == 'true'
+        if: steps.tagcheck.outputs.ok_tag == 'true' && steps.verify.outputs.ok == 'true'
         run: dotnet pack ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-build -o ./artifacts
 
       - name: Publish to NuGet
-        if: steps.verify.outputs.ok == 'true'
+        if: steps.tagcheck.outputs.ok_tag == 'true' && steps.verify.outputs.ok == 'true'
         run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
