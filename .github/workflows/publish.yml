@@ -8,20 +8,17 @@ on:
       - "v*"
 
 jobs:
-  build-test:
-    name: Build & Test (${{ matrix.os }})
+  build:
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
@@ -31,26 +28,60 @@ jobs:
       - name: Build
         run: dotnet build ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-restore
 
-      - name: Test
-        run: dotnet test -c Release --no-build
+      - name: Publish test binaries
+        run: dotnet publish ./TravelDocFakerTesting/TravelDocFakerTesting.csproj -c Release -o ./artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-binaries
+          path: ./artifacts
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Download test binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-binaries
+          path: ./artifacts
+
+      - name: Run tests (vstest)
+        shell: bash
+        run: |
+          TESTDLL=$(find ./artifacts -name "TravelDocFakerTesting.dll" | head -n 1)
+          if [ -z "$TESTDLL" ]; then echo "Test DLL not found"; exit 1; fi
+          dotnet vstest "$TESTDLL" --logger:"trx;LogFileName=test-results.trx" /collect:"XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-results
+          path: |
+            **/test-results.trx
+            **/coverage.cobertura.xml
 
   publish:
     name: Publish to NuGet
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-test]
+    needs: test
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout (full history for tags)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
@@ -58,17 +89,17 @@ jobs:
         id: meta
         shell: bash
         run: |
-          RAW="${GITHUB_REF_NAME}"     # e.g., v0.2.3
-          VERSION="${RAW#v}"           # -> 0.2.3
+          RAW="${GITHUB_REF_NAME}"
+          VERSION="${RAW#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Restore
         run: dotnet restore ./TravelDocFaker/TravelDocFaker.csproj
 
-      - name: Build (Release)
+      - name: Build
         run: dotnet build ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-restore
 
-      - name: Pack using tag version
+      - name: Pack
         run: dotnet pack ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-build -o ./artifacts /p:PackageVersion=${{ steps.meta.outputs.version }}
 
       - name: Publish to NuGet

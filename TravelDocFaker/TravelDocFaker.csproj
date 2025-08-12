@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <PackageId>TravelDocFaker</PackageId>
-    <Version>0.2.5</Version>
+    <Version>0.2.6</Version>
     <Authors>Tiago Andre</Authors>
     <Description>.NET library to generate TD3 MRZ, fake persons and passport images (testing only)</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
