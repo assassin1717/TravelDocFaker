@@ -1,21 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
-		<PackageId>TravelDocFaker</PackageId>
-		<Version>0.2.9</Version>
-		<Authors>Tiago Andre</Authors>
-		<Description>.NET library to generate TD3 MRZ, fake persons and passport images (testing only)</Description>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<RepositoryUrl>https://github.com/assassin1717/TravelDocFaker</RepositoryUrl>
-		<IncludeSymbols>true</IncludeSymbols>
-		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<ImplicitUsings>enable</ImplicitUsings>
-	</PropertyGroup>
-	<ItemGroup>
-		<PackageReference Include="Bogus" Version="35.6.3" />
-		<PackageReference Include="SkiaSharp" Version="3.119.0" />
-		<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
-		<None Include="README.md" Pack="true" PackagePath="\"/>
-	</ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageId>TravelDocFaker</PackageId>
+    <Version>0.2.10</Version>
+    <Authors>Tiago Andre</Authors>
+    <Description>.NET library to generate TD3 MRZ, fake persons and passport images (testing only)</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/assassin1717/TravelDocFaker</RepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Bogus" Version="35.6.3" />
+    <PackageReference Include="SkiaSharp" Version="3.119.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>
