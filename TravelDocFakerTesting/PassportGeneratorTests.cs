@@ -150,5 +150,30 @@ namespace TravelDocFakerTesting
             var composite = docField + docCd + dobField + dobCd + expField + expCd + optional + optionalCd;
             Assert.That(finalCd, Is.EqualTo(MrzCore.CheckDigit(composite)), "FinalCd invalid");
         }
+
+        [Test]
+        public void BuildTD3_WithCustomOptional_ShouldComputeUnderAgedAndFinalCd()
+        {
+            var p = new Person("ALICE", "ROSA", Gender.Female, DateOnly.FromDateTime(DateTime.Today.AddYears(-10)), "GBR");
+
+            var mrz = PassportGenerator.BuildTD3(p, passportNumber: "B1C2D3E4F", expiry: DateOnly.FromDateTime(DateTime.Today.AddYears(-5)));
+
+            var l2 = mrz.Line2;
+
+            var optional = Sub(l2, 28, 14);
+            var optionalCd = l2[42] - '0';
+            Assert.That(optionalCd, Is.EqualTo(MrzCore.CheckDigit(optional)), "OptionalCd invalid");
+
+            var docField = Sub(l2, 0, 9);
+            var docCd = l2[9] - '0';
+            var dobField = Sub(l2, 13, 6);
+            var dobCd = l2[19] - '0';
+            var expField = Sub(l2, 21, 6);
+            var expCd = l2[27] - '0';
+            var finalCd = l2[43] - '0';
+
+            var composite = docField + docCd + dobField + dobCd + expField + expCd + optional + optionalCd;
+            Assert.That(finalCd, Is.EqualTo(MrzCore.CheckDigit(composite)), "FinalCd invalid");
+        }
     }
 }
