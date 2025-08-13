@@ -107,3 +107,43 @@ jobs:
       - name: Run bump-version-ci.ps1
         shell: pwsh
         run: ./bump-version-ci.ps1
+
+  publish:
+    name: Publish to NuGet
+    needs: bump
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Read version from .csproj
+        id: ver
+        shell: pwsh
+        run: |
+          [xml]$x = Get-Content ./TravelDocFaker/TravelDocFaker.csproj
+          $v = $x.Project.PropertyGroup.Version
+          if (-not $v) { Write-Error "No <Version> in csproj after bump."; exit 1 }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore ./TravelDocFaker/TravelDocFaker.csproj
+
+      - name: Build (Release)
+        run: dotnet build ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-restore
+
+      - name: Pack (use bumped version)
+        run: dotnet pack ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-build -o ./artifacts /p:PackageVersion=${{ steps.ver.outputs.version }}
+
+      - name: Publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
