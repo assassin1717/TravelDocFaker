@@ -1,0 +1,109 @@
+name: CI (build + test + bump)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore ./TravelDocFaker/TravelDocFaker.csproj
+
+      - name: Build
+        run: dotnet build ./TravelDocFaker/TravelDocFaker.csproj -c Release --no-restore
+
+      - name: Publish test binaries
+        run: dotnet publish ./TravelDocFakerTesting/TravelDocFakerTesting.csproj -c Release -o ./artifacts
+
+      - name: Upload test binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-binaries
+          path: ./artifacts
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Download test binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-binaries
+          path: ./artifacts
+
+      # Linux: usar bash + find
+      - name: Run tests (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          TESTDLL=$(find ./artifacts -name "TravelDocFakerTesting.dll" | head -n 1)
+          if [ -z "$TESTDLL" ]; then echo "Test DLL not found"; exit 1; fi
+          dotnet vstest "$TESTDLL" --logger:"trx;LogFileName=test-results.trx" /collect:"XPlat Code Coverage"
+
+      # Windows: usar PowerShell + Get-ChildItem
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $testDll = Get-ChildItem -Recurse -Filter TravelDocFakerTesting.dll -Path ./artifacts | Select-Object -First 1
+          if (-not $testDll) { Write-Error "Test DLL not found"; exit 1 }
+          dotnet vstest $testDll.FullName --logger:"trx;LogFileName=test-results.trx" /collect:"XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-results
+          path: |
+            **/test-results.trx
+            **/coverage.cobertura.xml
+
+  bump:
+    name: Bump version & tag
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history for tagging)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET (optional but harmless)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Run bump-version-ci.ps1
+        shell: pwsh
+        run: ./bump-version-ci.ps1
